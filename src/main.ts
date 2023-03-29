@@ -9,6 +9,15 @@ import axios from 'axios';
  *      - Libraries: Express, TypeORM, Winston
  *      - Infrastructures: Kubernetes
  * Relation Templates: Microservice -> Microservice (service calls), Microservice -> Infrastructure (hosted on), Microservice -> Library (includes)
+ * Relations:
+ *     - Shopping Cart Service -> Order Service (service calls)
+ *     - Order Service -> Payment Service (service calls)
+ *     - Shopping Cart Service -> Express (includes)
+ *     - Shopping Cart Service -> TypeORM (includes)
+ *     - Order Service -> Express (includes)
+ *     - Order Service -> Winston (includes)
+ *     - Shopping Cart Service -> Kubernetes (hosted on)
+ *     - Order Service -> Kubernetes (hosted on)
  */
 
 
@@ -37,7 +46,7 @@ const createProjectMutation = gql`
     mutation CreateProject(
         $projectDescription: String!,
         $projectName: String!,
-        $repositoryURL: String!
+        $repositoryURL: URL!
     ) {
         createProject(input: {
             description: $projectDescription,
@@ -96,8 +105,39 @@ const createRelationTemplateMutation = gql`
     }
   }
 `;
+const createRelationMutation = gql`
+  mutation CreateRelation($startId: ID!, $endId: ID!, $templateId: ID!) {
+    createRelation(input: {
+      start: $startId,
+      end: $endId,
+      template: $templateId,
+      templatedFields: []
+    }) {
+      relation {
+        id
+      }
+    }
+  }
+`;
 
 
+async function createRelation(
+    client: GraphQLClient,
+    variables: {
+        startId: string;
+        endId: string;
+        templateId: string;
+    }
+) {
+    try {
+        const response: any = await client.request(createRelationMutation, variables);
+        console.log("Created new relation:", response.createRelation.relation.id);
+        return response.createRelation.relation.id;
+    } catch (error) {
+        console.error("Error creating relation:", error);
+        throw error;
+    }
+}
 async function createComponentTemplate(client: GraphQLClient, variables: any) {
     try {
         const response: any = await client.request(createMicroserviceComponentTemplateMutation, variables);
@@ -110,7 +150,7 @@ async function createComponentTemplate(client: GraphQLClient, variables: any) {
 async function createProject(client: GraphQLClient, variables: any) {
     try {
         const response: any = await client.request(createProjectMutation, variables);
-
+        console.log('Created new project:', response.createProject.project.id);
         return response.createProject.project.id;
     } catch (error) {
         console.error("Error creating project:", error);
@@ -160,21 +200,96 @@ async function main() {
     const libraryIDs = await createLibraryComponents(componentTemplateIDs.libraryTemplateID, client);
     const infrastructureIDs = await createInfrastructureComponents(componentTemplateIDs.infrastructureTemplateID, client);
     const relationTemplateIDs = await createRelationTemplates(componentTemplateIDs, client);
+    const service2ServiceRelationIDs = await createService2ServiceRelations(microserviceIDs, relationTemplateIDs, client); 
+    const service2LibraryRelationIDs = await createService2LibraryRelations(microserviceIDs, libraryIDs, relationTemplateIDs, client);
+    const service2InfrastructureRelationIDs = await createService2InfrastructureRelations(microserviceIDs, infrastructureIDs, relationTemplateIDs, client);
 
 
-
-
-    // const testProjectInput = {
-    //     projectDescription: "Test project",
-    //     projectName: "test-project",
-    //     repositoryURL: "https://github.com/test-account/test-project",
-    // };
-    // const projectID = await createProject(client, testProjectInput);
+    const testProjectInput = {
+        projectDescription: "Test project",
+        projectName: "test-project",
+        repositoryURL: "https://github.com/test-account/test-project",
+    };
+    const projectID = await createProject(client, testProjectInput);
 
 }
 
 main().catch((error) => console.error('Error:', error));
 
+async function createService2InfrastructureRelations(microserviceIDs: { orderServiceIDV1: any; shoppingCartServiceIDV1: any; paymentServiceIDV1: any; }, infrastructureIDs: { k8ID: any; }, relationTemplateIDs: { service2serviceRelationTemplateID: string; service2librabryRelationTemplateID: string; service2infrastructureRelationTemplateID: string; }, client: GraphQLClient) {
+    const shoppingCart2K8RelationInput = {
+        startId: microserviceIDs.shoppingCartServiceIDV1,
+        endId: infrastructureIDs.k8ID,
+        templateId: relationTemplateIDs.service2infrastructureRelationTemplateID,
+    };
+
+    const order2K8RelationInput = {
+        startId: microserviceIDs.orderServiceIDV1,
+        endId: infrastructureIDs.k8ID,
+        templateId: relationTemplateIDs.service2infrastructureRelationTemplateID,
+    };
+
+    const shoppingCart2K8RelationID = await createRelation(client, shoppingCart2K8RelationInput);
+    const order2K8RelationID = await createRelation(client, order2K8RelationInput);
+
+    return {
+        shoppingCart2K8RelationID,
+        order2K8RelationID,
+    };
+}
+async function createService2LibraryRelations(microserviceIDs: { orderServiceIDV1: any; shoppingCartServiceIDV1: any; paymentServiceIDV1: any; }, libraryIDs: { expressLibID: any; typeORMLibID: any; winstonLibID: any; }, relationTemplateIDs: { service2serviceRelationTemplateID: string; service2librabryRelationTemplateID: string; service2infrastructureRelationTemplateID: string; }, client: GraphQLClient) {
+    const shoppingCart2expressRelationInput = {
+        startId: microserviceIDs.shoppingCartServiceIDV1,
+        endId: libraryIDs.expressLibID,
+        templateId: relationTemplateIDs.service2librabryRelationTemplateID
+    };
+    const order2expressRelationInput = {
+        startId: microserviceIDs.orderServiceIDV1,
+        endId: libraryIDs.expressLibID,
+        templateId: relationTemplateIDs.service2librabryRelationTemplateID
+    };
+    const shoppingCart2typeORMRelationInput = {
+        startId: microserviceIDs.shoppingCartServiceIDV1,
+        endId: libraryIDs.typeORMLibID,
+        templateId: relationTemplateIDs.service2librabryRelationTemplateID
+    };
+    const order2winstonRelationInput = {
+        startId: microserviceIDs.orderServiceIDV1,
+        endId: libraryIDs.winstonLibID,
+        templateId: relationTemplateIDs.service2librabryRelationTemplateID
+    };
+
+    const shoppingCart2expressRelationID = await createRelation(client, shoppingCart2expressRelationInput);
+    const order2expressRelationID = await createRelation(client, order2expressRelationInput);
+    const shoppingCart2typeORMRelationID = await createRelation(client, shoppingCart2typeORMRelationInput);
+    const order2winstonRelationID = await createRelation(client, order2winstonRelationInput);
+
+    return {
+        shoppingCart2expressRelationID,
+        order2expressRelationID,
+        shoppingCart2typeORMRelationID,
+        order2winstonRelationID
+    };
+}
+async function createService2ServiceRelations(microserviceIDs: { orderServiceIDV1: any; shoppingCartServiceIDV1: any; paymentServiceIDV1: any; }, relationTemplateIDs: { service2serviceRelationTemplateID: string; service2librabryRelationTemplateID: string; service2infrastructureRelationTemplateID: string; }, client: GraphQLClient) {
+    const shoppingCart2orderRelationInput = {
+        startId: microserviceIDs.shoppingCartServiceIDV1,
+        endId: microserviceIDs.orderServiceIDV1,
+        templateId: relationTemplateIDs.service2serviceRelationTemplateID
+    };
+    const order2paymentRelationInput = {
+        startId: microserviceIDs.orderServiceIDV1,
+        endId: microserviceIDs.paymentServiceIDV1,
+        templateId: relationTemplateIDs.service2serviceRelationTemplateID
+    };
+
+    const shoppingCart2orderRelationID = await createRelation(client, shoppingCart2orderRelationInput);
+    const order2paymentRelationID = await createRelation(client, order2paymentRelationInput);
+    return {
+        shoppingCart2orderRelationID,
+        order2paymentRelationID
+    };
+}
 async function createRelationTemplates(componentTemplateIDs: { microserviceComponentTemplateID: any; libraryTemplateID: any; infrastructureTemplateID: any; }, client: GraphQLClient) {
     const service2ServiceRelationTemplateVariables = {
         name: "service2service-relation-template",
