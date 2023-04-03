@@ -80,9 +80,14 @@ const createComponentMutation = gql`
       }],
       templatedFields: []
     }) {
-      component {
-        id
-      }
+        component {
+            versions {
+              nodes {
+                id
+              }
+            }
+            id
+        }
     }
   }
 `;
@@ -159,10 +164,10 @@ async function createProject(client: GraphQLClient, variables: any) {
 async function createComponent(client: GraphQLClient, variables: any) {
     try {
         const response: any = await client.request(createComponentMutation, variables);
-        console.log('Created new component:', response.createComponent.component.id);
-        return response.createComponent.component.id;
+        console.log('Created new component version:', response.createComponent.component.versions.nodes[0].id);
+        return response.createComponent.component.versions.nodes[0].id;
     } catch (error) {
-        console.error("Error creating component:", error);
+        console.error("Error creating component version:", error);
     }
 }
 async function createRelationTemplate(client: GraphQLClient, variables: {
@@ -186,7 +191,7 @@ async function createRelationTemplate(client: GraphQLClient, variables: {
 
 async function main() {
     const endpoint = 'http://localhost:8080/graphql';
-    const token = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE2Nzk4NTk4NDIsImF1ZCI6ImJhY2tlbmQiLCJpc3MiOiJkZXYtbG9naW4tc2VydmljZSIsInN1YiI6ImEzOGNlNTQ3LTdhYjgtNDRmZS1iYWU4LTc0MmU5NTE1YWFkZiJ9.JC_jDCxweYXUjrgeOEvVnchnn5UIQKei6ZAf3oopWxk`; /* await getDeveloperToken(); */ // hardcoded for now
+    const token = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE2ODA1MTIxODAsImF1ZCI6ImJhY2tlbmQiLCJpc3MiOiJkZXYtbG9naW4tc2VydmljZSIsInN1YiI6IjU1YjYzOGJjLWI5NTAtNGY4Ni04MDY0LTk0NTU3NDUyMjI0ZiJ9.37LTrmgizjOwdvmRBm8jTxiEw2gdbB6eQJ-TDfEjjj0`; /* await getDeveloperToken(); */ // hardcoded for now
     // console.log('Developer token:', token);
 
     const client = new GraphQLClient(endpoint, {
@@ -200,7 +205,7 @@ async function main() {
     const libraryIDs = await createLibraryComponents(componentTemplateIDs.libraryTemplateID, client);
     const infrastructureIDs = await createInfrastructureComponents(componentTemplateIDs.infrastructureTemplateID, client);
     const relationTemplateIDs = await createRelationTemplates(componentTemplateIDs, client);
-    const service2ServiceRelationIDs = await createService2ServiceRelations(microserviceIDs, relationTemplateIDs, client); 
+    const service2ServiceRelationIDs = await createService2ServiceRelations(microserviceIDs, relationTemplateIDs, client);
     const service2LibraryRelationIDs = await createService2LibraryRelations(microserviceIDs, libraryIDs, relationTemplateIDs, client);
     const service2InfrastructureRelationIDs = await createService2InfrastructureRelations(microserviceIDs, infrastructureIDs, relationTemplateIDs, client);
 
