@@ -124,6 +124,15 @@ const createRelationMutation = gql`
     }
   }
 `;
+const addComponentVersionToProjectMutation = gql`
+    mutation AddComponentVersionToProject($projectId: ID!, $componentVersionId: ID!) {
+        addComponentVersionToProject(input: { project: $projectId, componentVersion: $componentVersionId }) {
+            project {
+                id
+            }
+        }
+    }
+`;
 
 
 async function createRelation(
@@ -187,7 +196,15 @@ async function createRelationTemplate(client: GraphQLClient, variables: {
     console.log("Created new relation template:", createRelationTemplateResponse.createRelationTemplate.relationTemplate.id);
     return createRelationTemplateResponse.createRelationTemplate.relationTemplate.id;
 }
-
+async function addComponentVersionToProject(client: GraphQLClient, variables: any) {
+    try {
+        const response: any = await client.request(addComponentVersionToProjectMutation, variables);
+        console.log('Added component version to project:', response.addComponentVersionToProject.project.id);
+        return response.addComponentVersionToProject.project.id;
+    } catch (error) {
+        console.error("Error adding component version:", error);
+    }
+}
 
 async function main() {
     const endpoint = 'http://localhost:8080/graphql';
@@ -209,17 +226,55 @@ async function main() {
     const service2LibraryRelationIDs = await createService2LibraryRelations(microserviceIDs, libraryIDs, relationTemplateIDs, client);
     const service2InfrastructureRelationIDs = await createService2InfrastructureRelations(microserviceIDs, infrastructureIDs, relationTemplateIDs, client);
 
-
     const testProjectInput = {
         projectDescription: "Test project",
         projectName: "test-project",
         repositoryURL: "https://github.com/test-account/test-project",
     };
     const projectID = await createProject(client, testProjectInput);
+    await addComponentsToProject(projectID, microserviceIDs, infrastructureIDs, libraryIDs, client);
 
 }
 
 main().catch((error) => console.error('Error:', error));
+
+async function addComponentsToProject(projectID: any, microserviceIDs: { orderServiceIDV1: any; shoppingCartServiceIDV1: any; paymentServiceIDV1: any; }, infrastructureIDs: { k8ID: any; }, libraryIDs: { expressLibID: any; typeORMLibID: any; winstonLibID: any; }, client: GraphQLClient) {
+    const addOrderServiceVersionToProjectInput = {
+        projectId: projectID,
+        componentVersionId: microserviceIDs.orderServiceIDV1,
+    };
+    const addShoppingCartServiceVersionToProjectInput = {
+        projectId: projectID,
+        componentVersionId: microserviceIDs.shoppingCartServiceIDV1,
+    };
+    const addPaymentServiceVersionToProjectInput = {
+        projectId: projectID,
+        componentVersionId: microserviceIDs.paymentServiceIDV1,
+    };
+    const addK8VersionToProjectInput = {
+        projectId: projectID,
+        componentVersionId: infrastructureIDs.k8ID,
+    };
+    const addExpressVersionToProjectInput = {
+        projectId: projectID,
+        componentVersionId: libraryIDs.expressLibID,
+    };
+    const addTypeORMVersionToProjectInput = {
+        projectId: projectID,
+        componentVersionId: libraryIDs.typeORMLibID,
+    };
+    const addWinstonVersionToProjectInput = {
+        projectId: projectID,
+        componentVersionId: libraryIDs.winstonLibID,
+    };
+    await addComponentVersionToProject(client, addOrderServiceVersionToProjectInput);
+    await addComponentVersionToProject(client, addShoppingCartServiceVersionToProjectInput);
+    await addComponentVersionToProject(client, addPaymentServiceVersionToProjectInput);
+    await addComponentVersionToProject(client, addK8VersionToProjectInput);
+    await addComponentVersionToProject(client, addExpressVersionToProjectInput);
+    await addComponentVersionToProject(client, addTypeORMVersionToProjectInput);
+    await addComponentVersionToProject(client, addWinstonVersionToProjectInput);
+}
 
 async function createService2InfrastructureRelations(microserviceIDs: { orderServiceIDV1: any; shoppingCartServiceIDV1: any; paymentServiceIDV1: any; }, infrastructureIDs: { k8ID: any; }, relationTemplateIDs: { service2serviceRelationTemplateID: string; service2librabryRelationTemplateID: string; service2infrastructureRelationTemplateID: string; }, client: GraphQLClient) {
     const shoppingCart2K8RelationInput = {
