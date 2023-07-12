@@ -197,18 +197,25 @@ const createIssueTemplateMutation = gql`
             id
           }
         }
+        assignmentTypes {
+          nodes {
+            id
+          }
+        }
       }
     }
   }
 `;
 const createIssueMutation = gql`
-    mutation createIssue($state: ID!, $template: ID$, $title: String!, $body: String!, $type: ID!) {
+    mutation createIssue($state: ID!, $template: ID!, $title: String!, $body: String!, $type: ID!, $trackable: ID!) {
         createIssue(input: {
             state: $state,
             template: $template,
             title: $title,
             body: $body,
-            type: $type
+            type: $type,
+            templatedFields: [],
+            trackables: [$trackable]
         }) {
             issue {
                 id
@@ -216,6 +223,54 @@ const createIssueMutation = gql`
         }
     }
 `;
+const getComponentsQuery = gql`
+  query getComponents {
+    components {
+      nodes {
+        id
+      }
+    }
+  }
+`;
+const createIssueRelationMutation = gql`
+  mutation createIssueRelation($issue:ID!, $relatedIssue:ID!, $issueRelationType: ID) {
+    createIssueRelation(input: {
+      issue: $issue
+      relatedIssue: $relatedIssue
+      issueRelationType: $issueRelationType
+    }) {
+      issueRelation {
+        id
+      }
+    }
+  }
+`
+const createLabelMutation = gql`
+  mutation createLabel($trackables: [ID!]!, $color: String!, $name: String!, $description: String!) {
+    createLabel(input: {
+      trackables: $trackables
+      color: $color
+      name: $name
+      description: $description
+    }) {
+      label {
+        id
+      }
+    }
+  }
+`
+const addLabelToIssueMutation = gql`
+  mutation addLabelToIssue($issue:ID!, $label: ID!) {
+    addLabelToIssue(input: {
+      issue: $issue
+      label: $label
+    }) {
+      addedLabelEvent {
+        id
+      }
+    }
+  }
+`
 
 async function createRelation(
   client: GraphQLClient,
@@ -332,25 +387,68 @@ async function createIssueTemplate(client: GraphQLClient, variables: any) {
       "Created issue template with ID:",
       response.createIssueTemplate.issueTemplate.id
     );
-    return response.createComponentTemplate.issueTemplate;
+    return response.createIssueTemplate.issueTemplate;
   } catch (error) {
     console.error("Error creating issue template:", error);
   }
 }
 
 async function createIssue(client: GraphQLClient, variables: any) {
-    try {
-        const response: any = await client.request(
-            createIssueMutation,
-            variables
-        );
-        console.log("Created issue with ID:", response.createIssue.issue.id);
-        return response.createIssue.issue.id;
-    } catch (error) {
-        console.error("Error creating issue:", error);
-    }
+  try {
+    const response: any = await client.request(createIssueMutation, variables);
+    console.log("Created issue with ID:", response.createIssue.issue.id);
+    return response.createIssue.issue.id;
+  } catch (error) {
+    console.error("Error creating issue:", error);
+  }
 }
 
+async function getComponents(client: GraphQLClient) {
+  try {
+    const response: any = await client.request(getComponentsQuery);
+    return response.components.nodes.map((node: any) => node.id);
+  } catch (error) {
+    console.error("Error getting components:", error);
+    throw error;
+  }
+}
+
+async function createIssueRelation(client: GraphQLClient, variables: any) {
+  try {
+    const response: any = await client.request(createIssueRelationMutation, variables);
+    console.log("Created issue relation with ID:", response.createIssueRelation.issueRelation.id);
+    return response.createIssueRelation.issueRelation.id;
+  } catch (error) {
+    console.error("Error creating issue relation:", error);
+  }
+}
+
+async function createLabel(client: GraphQLClient, name: string, description: string, color: string, trackables: string[]) {
+  try {
+    const response: any = await client.request(createLabelMutation, {
+      name,
+      description,
+      color,
+      trackables
+    });
+    console.log("Created label with ID:", response.createLabel.label.id);
+    return response.createLabel.label.id;
+  } catch (error) {
+    console.error("Error creating label:", error);
+  }
+}
+
+async function addLabelToIssue(client: GraphQLClient, label: string, issue: string) {
+  try {
+    const response: any = await client.request(addLabelToIssueMutation, {
+      label,
+      issue
+    });
+    console.log("Added label to issue:", issue);
+  } catch (error) {
+    console.error("Error adding label to issue:", error);
+  }
+}
 
 async function main() {
   const endpoint = "http://localhost:8080/graphql";
@@ -368,8 +466,11 @@ async function main() {
     componentTemplateIDs,
     client
   );
+  const issueTemplate = await createDefaultIssueTemplate(client);
 
-  const projectCount = 10;
+  const projectCount = 1;
+  const issueCount = 10
+
   for (let i = 0; i < projectCount; i++) {
     const microserviceIDs = await createMicroserviceComponents(
       componentTemplateIDs.microserviceComponentTemplateID,
@@ -415,6 +516,20 @@ async function main() {
       libraryIDs,
       client
     );
+  }
+  const components = await getComponents(client);
+  const issues = []
+  const labels = await createDefaultLabels(client, components);
+  for (const componentId of components) {
+    for (let i = 0; i < issueCount; i++) {
+      const issueId = await createRandomIssue(client, componentId, issueTemplate, labels);
+      issues.push(issueId);
+    }
+  }
+  for (let i = 0; i < issues.length; i++) {
+    const issue = issues[random(0, issues.length - 1)];
+    const relatedIssue = issues[random(0, issues.length - 1)];
+    await createRandomIssueRelation(client, issue, relatedIssue, issueTemplate);
   }
 }
 
@@ -909,6 +1024,61 @@ async function createDefaultIssueTemplate(client: GraphQLClient) {
 function random(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
+async function createRandomIssue(client: GraphQLClient, component: string, issueTemplate: any, labels: string[]): Promise<string> {
+  const issue = await createIssue(client, {
+    title: `Test Issue ${random(1, 1000)}`,
+    body: issueBody,
+    trackable: component,
+    template: issueTemplate.id,
+    state: issueTemplate.issueStates[random(0, issueTemplate.issueStates.length - 1)],
+    type: issueTemplate.issueTypes[random(0, issueTemplate.issueTypes.length - 1)],
+  });
+  for (const label of labels) {
+    if (Math.random() > 0.6){
+      await addLabelToIssue(client, label, issue);
+    }
+  }
+  return issue;
+}
+async function createRandomIssueRelation(client: GraphQLClient, issue: string, relatedIssue: string, issueTemplate: any) {
+  const relationType = issueTemplate.relationTypes[random(0, issueTemplate.relationTypes.length - 1)];
+  await createIssueRelation(client, {
+    issue,
+    relatedIssue,
+    issueRelationType: relationType,
+  });
+}
+async function createDefaultLabels(client: GraphQLClient, trackables: string[]): Promise<string[]> {
+  const labels = [
+    {
+      name: "bug",
+      description: "A bug in the software",
+      color: "#d73a4a",
+    },
+    {
+      name: "documentation",
+      description: "Documentation for the software",
+      color: "#0075ca",
+    },
+    {
+      name: "duplicate",
+      description: "This issue or pull request already exists",
+      color: "#cfd3d7",
+    },
+    {
+      name: "enhancement",
+      description: "A new feature or request",
+      color: "#a2eeef",
+    },
+  ]
+  const labelIDs: string[] = [];
+  for (const label of labels) {
+    const labelID = await createLabel(client, label.name, label.description, label.color, trackables);
+    labelIDs.push(labelID);
+  }
+  return labelIDs;
+}
+
 async function createUserAndGetID() {
   const newUserEndpoint = "http://localhost:3000/newUser";
   try {
@@ -958,7 +1128,7 @@ const loremIpsum = `Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   nisl tristique nunc, vitae ultricies ante magna non nunc. Donec
   euismod, nisl eget aliquam ultricies, massa nisl tristique nunc,
   vitae ultricies ante magna non nunc. Donec euismod, nisl eget
-  aliquam ultricies, massa nisl tristique nunc, vitae ultricies ante.`
+  aliquam ultricies, massa nisl tristique nunc, vitae ultricies ante.`;
 const issueBody = `# Niklas stupid issue
 
 Hello and welcome to my stupid issue.
@@ -983,4 +1153,4 @@ console.log(foo);
 
 ### And more text
 ${loremIpsum}
-`
+`;
