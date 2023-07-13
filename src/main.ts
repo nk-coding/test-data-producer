@@ -271,6 +271,19 @@ const addLabelToIssueMutation = gql`
     }
   }
 `
+const createAssignmentMutation = gql`
+  mutation createAssignment($user: ID!, $issue: ID!, $assignmentType: ID) {
+    createAssignment(input: {
+      assignmentType: $assignmentType
+      user: $user
+      issue: $issue
+    }) {
+      assignment {
+        id
+      }
+    }
+  }
+`
 
 async function createRelation(
   client: GraphQLClient,
@@ -450,10 +463,22 @@ async function addLabelToIssue(client: GraphQLClient, label: string, issue: stri
   }
 }
 
+async function createAssignment(client: GraphQLClient, variables: any) {
+  try {
+    const response: any = await client.request(createAssignmentMutation, variables);
+    console.log("Created assignment with ID:", response.createAssignment.assignment.id);
+    return response.createAssignment.assignment.id;
+  } catch (error) {
+    console.error("Error creating assignment:", error);
+  }
+}
+
 async function main() {
   const endpoint = "http://localhost:8080/graphql";
-  const token = await getDeveloperToken();
+  const token = await getDeveloperToken("test-user");
   // console.log('Developer token:', token);
+
+  const testUsers = await Promise.all(['SapphireDragon27', 'LuckyDuckling91', 'WhisperingShadow', 'ElectricJaguar', 'RainbowDreamer42'].map(username => createUserAndGetID(username)));
 
   const client = new GraphQLClient(endpoint, {
     headers: {
@@ -522,7 +547,7 @@ async function main() {
   const labels = await createDefaultLabels(client, components);
   for (const componentId of components) {
     for (let i = 0; i < issueCount; i++) {
-      const issueId = await createRandomIssue(client, componentId, issueTemplate, labels);
+      const issueId = await createRandomIssue(client, componentId, issueTemplate, labels, testUsers);
       issues.push(issueId);
     }
   }
@@ -1024,7 +1049,7 @@ async function createDefaultIssueTemplate(client: GraphQLClient) {
 function random(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
-async function createRandomIssue(client: GraphQLClient, component: string, issueTemplate: any, labels: string[]): Promise<string> {
+async function createRandomIssue(client: GraphQLClient, component: string, issueTemplate: any, labels: string[], users: string[]): Promise<string> {
   const issue = await createIssue(client, {
     title: `Test Issue ${random(1, 1000)}`,
     body: issueBody,
@@ -1036,6 +1061,15 @@ async function createRandomIssue(client: GraphQLClient, component: string, issue
   for (const label of labels) {
     if (Math.random() > 0.6){
       await addLabelToIssue(client, label, issue);
+    }
+  }
+  for (const user of users) {
+    if (Math.random() > 0.5){
+      await createAssignment(client, {
+        user,
+        issue,
+        assignmentType: issueTemplate.assignmentTypes[random(0, issueTemplate.assignmentTypes.length - 1)],
+      });
     }
   }
   return issue;
@@ -1079,14 +1113,14 @@ async function createDefaultLabels(client: GraphQLClient, trackables: string[]):
   return labelIDs;
 }
 
-async function createUserAndGetID() {
+async function createUserAndGetID(username: string) {
   const newUserEndpoint = "http://localhost:3000/newUser";
   try {
     const newUserResponse = await axios.post(
       newUserEndpoint,
       {
-        username: "sample-user8",
-        displayName: "sample-user8",
+        username,
+        displayName: username,
         email: "",
         isAdmin: true,
       },
@@ -1097,10 +1131,10 @@ async function createUserAndGetID() {
     console.error(error);
   }
 }
-async function getDeveloperToken() {
+async function getDeveloperToken(username: string) {
   const tokenEndpoint = "http://localhost:3000/token";
   try {
-    const userID = await createUserAndGetID();
+    const userID = await createUserAndGetID(username);
 
     const tokenResponse = await axios.get(
       `${tokenEndpoint}?username=&id=${encodeURIComponent(userID)}`
