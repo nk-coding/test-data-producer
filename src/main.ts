@@ -207,21 +207,30 @@ const createIssueTemplateMutation = gql`
   }
 `;
 const createIssueMutation = gql`
-    mutation createIssue($state: ID!, $template: ID!, $title: String!, $body: String!, $type: ID!, $trackable: ID!) {
-        createIssue(input: {
-            state: $state,
-            template: $template,
-            title: $title,
-            body: $body,
-            type: $type,
-            templatedFields: [],
-            trackables: [$trackable]
-        }) {
-            issue {
-                id
-            }
-        }
+  mutation createIssue(
+    $state: ID!
+    $template: ID!
+    $title: String!
+    $body: String!
+    $type: ID!
+    $trackable: ID!
+  ) {
+    createIssue(
+      input: {
+        state: $state
+        template: $template
+        title: $title
+        body: $body
+        type: $type
+        templatedFields: []
+        trackables: [$trackable]
+      }
+    ) {
+      issue {
+        id
+      }
     }
+  }
 `;
 const getComponentsQuery = gql`
   query getComponents {
@@ -233,57 +242,76 @@ const getComponentsQuery = gql`
   }
 `;
 const createIssueRelationMutation = gql`
-  mutation createIssueRelation($issue:ID!, $relatedIssue:ID!, $issueRelationType: ID) {
-    createIssueRelation(input: {
-      issue: $issue
-      relatedIssue: $relatedIssue
-      issueRelationType: $issueRelationType
-    }) {
+  mutation createIssueRelation(
+    $issue: ID!
+    $relatedIssue: ID!
+    $issueRelationType: ID
+  ) {
+    createIssueRelation(
+      input: {
+        issue: $issue
+        relatedIssue: $relatedIssue
+        issueRelationType: $issueRelationType
+      }
+    ) {
       issueRelation {
         id
       }
     }
   }
-`
+`;
 const createLabelMutation = gql`
-  mutation createLabel($trackables: [ID!]!, $color: String!, $name: String!, $description: String!) {
-    createLabel(input: {
-      trackables: $trackables
-      color: $color
-      name: $name
-      description: $description
-    }) {
+  mutation createLabel(
+    $trackables: [ID!]!
+    $color: String!
+    $name: String!
+    $description: String!
+  ) {
+    createLabel(
+      input: {
+        trackables: $trackables
+        color: $color
+        name: $name
+        description: $description
+      }
+    ) {
       label {
         id
       }
     }
   }
-`
+`;
 const addLabelToIssueMutation = gql`
-  mutation addLabelToIssue($issue:ID!, $label: ID!) {
-    addLabelToIssue(input: {
-      issue: $issue
-      label: $label
-    }) {
+  mutation addLabelToIssue($issue: ID!, $label: ID!) {
+    addLabelToIssue(input: { issue: $issue, label: $label }) {
       addedLabelEvent {
         id
       }
     }
   }
-`
+`;
 const createAssignmentMutation = gql`
   mutation createAssignment($user: ID!, $issue: ID!, $assignmentType: ID) {
-    createAssignment(input: {
-      assignmentType: $assignmentType
-      user: $user
-      issue: $issue
-    }) {
+    createAssignment(
+      input: { assignmentType: $assignmentType, user: $user, issue: $issue }
+    ) {
       assignment {
         id
       }
     }
   }
-`
+`;
+const createIssueCommentMutation = gql`
+  mutation createIssueComment($body: String!, $issue: ID!, $answers: ID) {
+    createIssueComment(
+      input: { body: $body, issue: $issue, answers: $answers }
+    ) {
+      issueComment {
+        id
+      }
+    }
+  }
+`;
 
 async function createRelation(
   client: GraphQLClient,
@@ -428,21 +456,33 @@ async function getComponents(client: GraphQLClient) {
 
 async function createIssueRelation(client: GraphQLClient, variables: any) {
   try {
-    const response: any = await client.request(createIssueRelationMutation, variables);
-    console.log("Created issue relation with ID:", response.createIssueRelation.issueRelation.id);
+    const response: any = await client.request(
+      createIssueRelationMutation,
+      variables
+    );
+    console.log(
+      "Created issue relation with ID:",
+      response.createIssueRelation.issueRelation.id
+    );
     return response.createIssueRelation.issueRelation.id;
   } catch (error) {
     console.error("Error creating issue relation:", error);
   }
 }
 
-async function createLabel(client: GraphQLClient, name: string, description: string, color: string, trackables: string[]) {
+async function createLabel(
+  client: GraphQLClient,
+  name: string,
+  description: string,
+  color: string,
+  trackables: string[]
+) {
   try {
     const response: any = await client.request(createLabelMutation, {
       name,
       description,
       color,
-      trackables
+      trackables,
     });
     console.log("Created label with ID:", response.createLabel.label.id);
     return response.createLabel.label.id;
@@ -451,11 +491,15 @@ async function createLabel(client: GraphQLClient, name: string, description: str
   }
 }
 
-async function addLabelToIssue(client: GraphQLClient, label: string, issue: string) {
+async function addLabelToIssue(
+  client: GraphQLClient,
+  label: string,
+  issue: string
+) {
   try {
     const response: any = await client.request(addLabelToIssueMutation, {
       label,
-      issue
+      issue,
     });
     console.log("Added label to issue:", issue);
   } catch (error) {
@@ -465,11 +509,33 @@ async function addLabelToIssue(client: GraphQLClient, label: string, issue: stri
 
 async function createAssignment(client: GraphQLClient, variables: any) {
   try {
-    const response: any = await client.request(createAssignmentMutation, variables);
-    console.log("Created assignment with ID:", response.createAssignment.assignment.id);
+    const response: any = await client.request(
+      createAssignmentMutation,
+      variables
+    );
+    console.log(
+      "Created assignment with ID:",
+      response.createAssignment.assignment.id
+    );
     return response.createAssignment.assignment.id;
   } catch (error) {
     console.error("Error creating assignment:", error);
+  }
+}
+
+async function createIssueComment(client: GraphQLClient, variables: any) {
+  try {
+    const response: any = await client.request(
+      createIssueCommentMutation,
+      variables
+    );
+    console.log(
+      "Created issue comment with ID:",
+      response.createIssueComment.issueComment.id
+    );
+    return response.createIssueComment.issueComment.id;
+  } catch (error) {
+    console.error("Error creating issue comment:", error);
   }
 }
 
@@ -478,7 +544,15 @@ async function main() {
   const token = await getDeveloperToken("test-user");
   // console.log('Developer token:', token);
 
-  const testUsers = await Promise.all(['SapphireDragon27', 'LuckyDuckling91', 'WhisperingShadow', 'ElectricJaguar', 'RainbowDreamer42'].map(username => createUserAndGetID(username)));
+  const testUsers = await Promise.all(
+    [
+      "SapphireDragon27",
+      "LuckyDuckling91",
+      "WhisperingShadow",
+      "ElectricJaguar",
+      "RainbowDreamer42",
+    ].map((username) => createUserAndGetID(username))
+  );
 
   const client = new GraphQLClient(endpoint, {
     headers: {
@@ -494,7 +568,7 @@ async function main() {
   const issueTemplate = await createDefaultIssueTemplate(client);
 
   const projectCount = 1;
-  const issueCount = 10
+  const issueCount = 10;
 
   for (let i = 0; i < projectCount; i++) {
     const microserviceIDs = await createMicroserviceComponents(
@@ -543,11 +617,17 @@ async function main() {
     );
   }
   const components = await getComponents(client);
-  const issues = []
+  const issues = [];
   const labels = await createDefaultLabels(client, components);
   for (const componentId of components) {
     for (let i = 0; i < issueCount; i++) {
-      const issueId = await createRandomIssue(client, componentId, issueTemplate, labels, testUsers);
+      const issueId = await createRandomIssue(
+        client,
+        componentId,
+        issueTemplate,
+        labels,
+        testUsers
+      );
       issues.push(issueId);
     }
   }
@@ -1049,40 +1129,79 @@ async function createDefaultIssueTemplate(client: GraphQLClient) {
 function random(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
-async function createRandomIssue(client: GraphQLClient, component: string, issueTemplate: any, labels: string[], users: string[]): Promise<string> {
+async function createRandomIssue(
+  client: GraphQLClient,
+  component: string,
+  issueTemplate: any,
+  labels: string[],
+  users: string[]
+): Promise<string> {
   const issue = await createIssue(client, {
     title: `Test Issue ${random(1, 1000)}`,
     body: issueBody,
     trackable: component,
     template: issueTemplate.id,
-    state: issueTemplate.issueStates[random(0, issueTemplate.issueStates.length - 1)],
-    type: issueTemplate.issueTypes[random(0, issueTemplate.issueTypes.length - 1)],
+    state:
+      issueTemplate.issueStates[
+        random(0, issueTemplate.issueStates.length - 1)
+      ],
+    type: issueTemplate.issueTypes[
+      random(0, issueTemplate.issueTypes.length - 1)
+    ],
   });
   for (const label of labels) {
-    if (Math.random() > 0.6){
+    if (Math.random() > 0.6) {
       await addLabelToIssue(client, label, issue);
     }
   }
   for (const user of users) {
-    if (Math.random() > 0.5){
+    if (Math.random() > 0.5) {
       await createAssignment(client, {
         user,
         issue,
-        assignmentType: issueTemplate.assignmentTypes[random(0, issueTemplate.assignmentTypes.length - 1)],
+        assignmentType:
+          issueTemplate.assignmentTypes[
+            random(0, issueTemplate.assignmentTypes.length - 1)
+          ],
       });
     }
   }
+  const existingComments: string[] = [];
+  const commentCount = random(0, 10);
+  for (let i = 0; i < commentCount; i++) {
+    let answers = undefined;
+    if (existingComments.length > 0 && Math.random() > 0.5) {
+      answers = existingComments[random(0, existingComments.length - 1)];
+    }
+    const comment = await createIssueComment(client, {
+      issue,
+      body: loremIpsum,
+      answers
+    })
+    existingComments.push(comment);
+  }
   return issue;
 }
-async function createRandomIssueRelation(client: GraphQLClient, issue: string, relatedIssue: string, issueTemplate: any) {
-  const relationType = issueTemplate.relationTypes[random(0, issueTemplate.relationTypes.length - 1)];
+async function createRandomIssueRelation(
+  client: GraphQLClient,
+  issue: string,
+  relatedIssue: string,
+  issueTemplate: any
+) {
+  const relationType =
+    issueTemplate.relationTypes[
+      random(0, issueTemplate.relationTypes.length - 1)
+    ];
   await createIssueRelation(client, {
     issue,
     relatedIssue,
     issueRelationType: relationType,
   });
 }
-async function createDefaultLabels(client: GraphQLClient, trackables: string[]): Promise<string[]> {
+async function createDefaultLabels(
+  client: GraphQLClient,
+  trackables: string[]
+): Promise<string[]> {
   const labels = [
     {
       name: "bug",
@@ -1104,10 +1223,16 @@ async function createDefaultLabels(client: GraphQLClient, trackables: string[]):
       description: "A new feature or request",
       color: "#a2eeef",
     },
-  ]
+  ];
   const labelIDs: string[] = [];
   for (const label of labels) {
-    const labelID = await createLabel(client, label.name, label.description, label.color, trackables);
+    const labelID = await createLabel(
+      client,
+      label.name,
+      label.description,
+      label.color,
+      trackables
+    );
     labelIDs.push(labelID);
   }
   return labelIDs;
