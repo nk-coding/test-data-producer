@@ -25,7 +25,8 @@ const createMicroserviceComponentTemplateMutation = gql`
     $componentTemplateDescription: String!
     $componentTemplateName: String!
     $componentVersionTemplateDescription: String!
-    $componentVersionTemplateName: String!
+    $componentVersionTemplateName: String!,
+    $shapeType: ShapeType!
   ) {
     createComponentTemplate(
       input: {
@@ -35,6 +36,8 @@ const createMicroserviceComponentTemplateMutation = gql`
           description: $componentVersionTemplateDescription
           name: $componentVersionTemplateName
         }
+        shapeType: $shapeType,
+        stroke: { }
       }
     ) {
       componentTemplate {
@@ -116,9 +119,39 @@ const createRelationTemplateMutation = gql`
         ]
         description: $description
         name: $name
+        markerType: ARROW
       }
     ) {
       relationTemplate {
+        id
+      }
+    }
+  }
+`;
+const createInterfaceSpecificationTemplateMutation = gql`
+  mutation CreateInterfaceSpecificationTemplate(
+    $name: String!
+    $description: String!
+    $componentTemplates: [ID!]!
+  ) {
+    createInterfaceSpecificationTemplate(
+      input: {
+        name: $name
+        description: $description
+        canBeVisibleOnComponents: $componentTemplates
+        canBeInvisibleOnComponents: $componentTemplates
+        interfaceTemplate: { name: $name, description: $description }
+        interfacePartTemplate: { name: $name, description: $description }
+        interfaceSpecificationVersionTemplate: {
+          name: $name
+          description: $description
+        }
+        interfaceDefinitionTemplate: { name: $name, description: $description }
+        shapeType: CIRCLE,
+        stroke: { }
+      }
+    ) {
+      interfaceSpecificationTemplate {
         id
       }
     }
@@ -313,6 +346,72 @@ const createIssueCommentMutation = gql`
   }
 `;
 
+const createInterfaceSpecificationMutation = gql`
+  mutation CreateInterfaceSpecification(
+    $component: ID!
+    $template: ID!
+    $name: String!
+    $description: String!
+    $versions: [InterfaceSpecificationVersionInput!]!
+    $definedParts: [InterfacePartInput!]!
+  ) {
+    createInterfaceSpecification(
+      input: {
+        component: $component
+        template: $template
+        name: $name
+        description: $description
+        versions: $versions
+        templatedFields: []
+        definedParts: $definedParts
+      }
+    ) {
+      interfaceSpecification {
+        id
+        versions {
+          nodes {
+            id
+          }
+        }
+        definedParts {
+          nodes {
+            id
+          }
+        }
+      }
+    }
+  }
+`;
+
+const addActivePartsMutation = gql`
+  mutation AddActiveParts($id: ID!, $parts: [ID!]!) {
+    updateInterfaceSpecificationVersion(
+      input: { id: $id, addedActiveParts: $parts }
+    ) {
+      interfaceSpecificationVersion {
+        id
+      }
+    }
+  }
+`;
+
+const addInterfaceMutation = gql`
+  mutation AddInterface($component: ID!, $interface: ID!) {
+    addInterfaceSpecificationVersionToComponentVersion(
+      input: {
+        componentVersion: $component
+        interfaceSpecificationVersion: $interface
+        visible: true
+        invisible: false
+      }
+    ) {
+      componentVersion {
+        id
+      }
+    }
+  }
+`;
+
 async function createRelation(
   client: GraphQLClient,
   variables: {
@@ -348,6 +447,27 @@ async function createComponentTemplate(client: GraphQLClient, variables: any) {
     console.error("Error creating component template:", error);
   }
 }
+
+async function createInterfaceSpecificationTemplate(
+  client: GraphQLClient,
+  variables: any
+) {
+  try {
+    const response: any = await client.request(
+      createInterfaceSpecificationTemplateMutation,
+      variables
+    );
+    console.log(
+      "Created interface specification template with ID:",
+      response.createInterfaceSpecificationTemplate
+        .interfaceSpecificationTemplate.id
+    );
+    return response.createInterfaceSpecificationTemplate
+      .interfaceSpecificationTemplate.id;
+  } catch (error) {
+    console.error("Error creating interface specification template:", error);
+  }
+}
 async function createProject(client: GraphQLClient, variables: any) {
   try {
     const response: any = await client.request(
@@ -370,7 +490,10 @@ async function createComponent(client: GraphQLClient, variables: any) {
       "Created new component version:",
       response.createComponent.component.versions.nodes[0].id
     );
-    return response.createComponent.component.versions.nodes[0].id;
+    return [
+      response.createComponent.component.versions.nodes[0].id,
+      response.createComponent.component.id,
+    ];
   } catch (error) {
     console.error("Error creating component version:", error);
   }
@@ -539,6 +662,77 @@ async function createIssueComment(client: GraphQLClient, variables: any) {
   }
 }
 
+async function createInterfaceSpecification(
+  client: GraphQLClient,
+  component: string,
+  template: string,
+  name: string,
+  description: string,
+  versions: string[],
+  parts: string[]
+) {
+  try {
+    const response: any = await client.request(
+      createInterfaceSpecificationMutation,
+      {
+        component,
+        template,
+        name,
+        description,
+        versions: versions.map((version) => ({
+          version,
+          description: "",
+          name: `${name}-${version}`,
+          templatedFields: [],
+        })),
+        definedParts: parts.map((part) => ({
+          name: part,
+          description: "",
+          templatedFields: [],
+        })),
+      }
+    );
+    return response.createInterfaceSpecification.interfaceSpecification;
+  } catch (error) {
+    console.error("Error creating interface specification:", error);
+  }
+}
+
+async function addActiveParts(
+  client: GraphQLClient,
+  id: string,
+  parts: string[]
+) {
+  try {
+    await client.request(addActivePartsMutation, {
+      id,
+      parts,
+    });
+    console.log("Added active parts to interface specification version:", id);
+  } catch (error) {
+    console.error(
+      "Error adding active parts to interface specification:",
+      error
+    );
+  }
+}
+
+async function addInterface(
+  client: GraphQLClient,
+  componentVersion: string,
+  interfaceSpecificationVersion: string
+) {
+  try {
+    await client.request(addInterfaceMutation, {
+      component: componentVersion,
+      interface: interfaceSpecificationVersion,
+    });
+    console.log("Added interface to component version:", componentVersion);
+  } catch (error) {
+    console.error("Error adding interface to component:", error);
+  }
+}
+
 async function main() {
   const endpoint = "http://localhost:8080/graphql";
   const token = await getDeveloperToken("test-user");
@@ -561,6 +755,10 @@ async function main() {
   });
 
   const componentTemplateIDs = await createComponentTemplates(client);
+  const interfaceTemplateIDs = await createInterfaceTemplates(
+    client,
+    componentTemplateIDs
+  );
   const relationTemplateIDs = await createRelationTemplates(
     componentTemplateIDs,
     client
@@ -573,6 +771,7 @@ async function main() {
   for (let i = 0; i < projectCount; i++) {
     const microserviceIDs = await createMicroserviceComponents(
       componentTemplateIDs.microserviceComponentTemplateID,
+      interfaceTemplateIDs.restInterfaceTemplateId,
       client
     );
     const libraryIDs = await createLibraryComponents(
@@ -895,7 +1094,7 @@ async function createInfrastructureComponents(
 
   const k8ID = await createComponent(client, kubernetesComponentVariables);
   return {
-    k8ID,
+    k8ID: k8ID![0],
   };
 }
 async function createLibraryComponents(
@@ -936,13 +1135,14 @@ async function createLibraryComponents(
   const winstonLibID = await createComponent(client, winstonComponentVariables);
 
   return {
-    expressLibID,
-    typeORMLibID,
-    winstonLibID,
+    expressLibID: expressLibID![0],
+    typeORMLibID: typeORMLibID![0],
+    winstonLibID: winstonLibID![0],
   };
 }
 async function createMicroserviceComponents(
   microserviceComponentTemplateID: string,
+  restInterfaceTemplateID: string,
   client: GraphQLClient
 ) {
   const orderServiceInput = {
@@ -977,10 +1177,31 @@ async function createMicroserviceComponents(
   );
   const paymentServiceIDV1 = await createComponent(client, paymentServiceInput);
 
-  return {
+  for (const componentIds of [
     orderServiceIDV1,
     shoppingCartServiceIDV1,
     paymentServiceIDV1,
+  ]) {
+    const data = await createInterfaceSpecification(
+      client,
+      componentIds![1],
+      restInterfaceTemplateID,
+      "REST",
+      "REST API",
+      ["1.0", "1.1", "2.0"],
+      ["GET", "POST", "PUT", "DELETE"]
+    );
+    const partIds = data.definedParts.nodes.map((node: any) => node.id);
+    for (const version of data.versions.nodes) {
+      await addActiveParts(client, version.id, partIds);
+      await addInterface(client, componentIds![0], version.id);
+    }
+  }
+
+  return {
+    orderServiceIDV1: orderServiceIDV1![0],
+    shoppingCartServiceIDV1: shoppingCartServiceIDV1![0],
+    paymentServiceIDV1: paymentServiceIDV1![0],
   };
 }
 async function createComponentTemplates(client: GraphQLClient) {
@@ -989,6 +1210,7 @@ async function createComponentTemplates(client: GraphQLClient) {
     componentTemplateName: "microservice-template",
     componentVersionTemplateDescription: "Microservice Version Template",
     componentVersionTemplateName: "microservice-version-template",
+    shapeType: "RECT"
   };
 
   const libraryTemplateInput = {
@@ -996,6 +1218,7 @@ async function createComponentTemplates(client: GraphQLClient) {
     componentTemplateName: "library-template",
     componentVersionTemplateDescription: "Library Version Template",
     componentVersionTemplateName: "library-version-template",
+    shapeType: "ELLIPSE"
   };
 
   const infrastructureTemplateInput = {
@@ -1003,6 +1226,7 @@ async function createComponentTemplates(client: GraphQLClient) {
     componentTemplateName: "infrastructure-template",
     componentVersionTemplateDescription: "Infrastructure Version Template",
     componentVersionTemplateName: "infrastructure-version-template",
+    shapeType: "HEXAGON"
   };
 
   const microserviceComponentTemplateID = await createComponentTemplate(
@@ -1024,6 +1248,25 @@ async function createComponentTemplates(client: GraphQLClient) {
     infrastructureTemplateID,
   };
 }
+
+async function createInterfaceTemplates(
+  client: GraphQLClient,
+  componentTemplates: Awaited<ReturnType<typeof createComponentTemplates>>
+) {
+  const restInterfaceTemplateId = await createInterfaceSpecificationTemplate(
+    client,
+    {
+      name: "REST",
+      description: "REST Api endpoint",
+      componentTemplates: [componentTemplates.microserviceComponentTemplateID],
+    }
+  );
+
+  return {
+    restInterfaceTemplateId,
+  };
+}
+
 async function createDefaultIssueTemplate(client: GraphQLClient) {
   const issueTypes = [
     {
@@ -1109,6 +1352,25 @@ async function createDefaultIssueTemplate(client: GraphQLClient) {
     issuePriorities,
     relationTypes,
   });
+  const secondaryTemplate = await createIssueTemplate(client, {
+    name: "Secondary Issue Template",
+    description: "Secondary issue template",
+    assignmentTypes,
+    issueTypes,
+    issueStates,
+    issuePriorities,
+    relationTypes,
+  });
+  const emptyTemplate = await createIssueTemplate(client, {
+    name: "Empty Issue Template",
+    description: "Empty issue template",
+    assignmentTypes: [],
+    issueTypes: [],
+    issueStates: [],
+    issuePriorities: [],
+    relationTypes: [],
+  });
+
   return {
     id: result.id,
     issueTypes: result.issueTypes.nodes.map((issueType: any) => issueType.id),
@@ -1176,8 +1438,8 @@ async function createRandomIssue(
     const comment = await createIssueComment(client, {
       issue,
       body: loremIpsum,
-      answers
-    })
+      answers,
+    });
     existingComments.push(comment);
   }
   return issue;
