@@ -353,7 +353,6 @@ const createInterfaceSpecificationMutation = gql`
     $name: String!
     $description: String!
     $versions: [InterfaceSpecificationVersionInput!]!
-    $definedParts: [InterfacePartInput!]!
   ) {
     createInterfaceSpecification(
       input: {
@@ -363,7 +362,6 @@ const createInterfaceSpecificationMutation = gql`
         description: $description
         versions: $versions
         templatedFields: []
-        definedParts: $definedParts
       }
     ) {
       interfaceSpecification {
@@ -373,23 +371,6 @@ const createInterfaceSpecificationMutation = gql`
             id
           }
         }
-        definedParts {
-          nodes {
-            id
-          }
-        }
-      }
-    }
-  }
-`;
-
-const addActivePartsMutation = gql`
-  mutation AddActiveParts($id: ID!, $parts: [ID!]!) {
-    updateInterfaceSpecificationVersion(
-      input: { id: $id, addedActiveParts: $parts }
-    ) {
-      interfaceSpecificationVersion {
-        id
       }
     }
   }
@@ -668,8 +649,7 @@ async function createInterfaceSpecification(
   template: string,
   name: string,
   description: string,
-  versions: string[],
-  parts: string[]
+  versions: [string, string[]][]
 ) {
   try {
     const response: any = await client.request(
@@ -679,41 +659,22 @@ async function createInterfaceSpecification(
         template,
         name,
         description,
-        versions: versions.map((version) => ({
+        versions: versions.map(([version, parts]) => ({
           version,
           description: "",
           name: `${name}-${version}`,
           templatedFields: [],
-        })),
-        definedParts: parts.map((part) => ({
-          name: part,
-          description: "",
-          templatedFields: [],
-        })),
+          parts: parts.map((part) => ({
+            name: part,
+            description: "",
+            templatedFields: [],
+          })),
+        }))
       }
     );
     return response.createInterfaceSpecification.interfaceSpecification;
   } catch (error) {
     console.error("Error creating interface specification:", error);
-  }
-}
-
-async function addActiveParts(
-  client: GraphQLClient,
-  id: string,
-  parts: string[]
-) {
-  try {
-    await client.request(addActivePartsMutation, {
-      id,
-      parts,
-    });
-    console.log("Added active parts to interface specification version:", id);
-  } catch (error) {
-    console.error(
-      "Error adding active parts to interface specification:",
-      error
-    );
   }
 }
 
@@ -1182,18 +1143,16 @@ async function createMicroserviceComponents(
     shoppingCartServiceIDV1,
     paymentServiceIDV1,
   ]) {
+    const parts = ["GET", "POST", "PUT", "DELETE"]
     const data = await createInterfaceSpecification(
       client,
       componentIds![1],
       restInterfaceTemplateID,
       "REST",
       "REST API",
-      ["1.0", "1.1", "2.0"],
-      ["GET", "POST", "PUT", "DELETE"]
+      [["1.0", parts], ["1.1", parts], ["2.0", parts]]
     );
-    const partIds = data.definedParts.nodes.map((node: any) => node.id);
     for (const version of data.versions.nodes) {
-      await addActiveParts(client, version.id, partIds);
       await addInterface(client, componentIds![0], version.id);
     }
   }
