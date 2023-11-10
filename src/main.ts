@@ -20,12 +20,14 @@ import axios from "axios";
  *     - Order Service -> Kubernetes (hosted on)
  */
 
+const ignoreRelations = false;
+
 const createMicroserviceComponentTemplateMutation = gql`
   mutation CreateComponentTemplate(
     $componentTemplateDescription: String!
     $componentTemplateName: String!
     $componentVersionTemplateDescription: String!
-    $componentVersionTemplateName: String!,
+    $componentVersionTemplateName: String!
     $shapeType: ShapeType!
   ) {
     createComponentTemplate(
@@ -36,8 +38,8 @@ const createMicroserviceComponentTemplateMutation = gql`
           description: $componentVersionTemplateDescription
           name: $componentVersionTemplateName
         }
-        shapeType: $shapeType,
-        stroke: { }
+        shapeType: $shapeType
+        stroke: {}
       }
     ) {
       componentTemplate {
@@ -147,8 +149,8 @@ const createInterfaceSpecificationTemplateMutation = gql`
           description: $description
         }
         interfaceDefinitionTemplate: { name: $name, description: $description }
-        shapeType: CIRCLE,
-        stroke: { }
+        shapeType: CIRCLE
+        stroke: {}
       }
     ) {
       interfaceSpecificationTemplate {
@@ -669,7 +671,7 @@ async function createInterfaceSpecification(
             description: "",
             templatedFields: [],
           })),
-        }))
+        })),
       }
     );
     return response.createInterfaceSpecification.interfaceSpecification;
@@ -696,8 +698,7 @@ async function addInterface(
 
 async function main() {
   const endpoint = "http://localhost:8080/graphql";
-  const token = await getDeveloperToken("test-user");
-  // console.log('Developer token:', token);
+  const token = process.argv[2];
 
   const testUsers = await Promise.all(
     [
@@ -706,7 +707,7 @@ async function main() {
       "WhisperingShadow",
       "ElectricJaguar",
       "RainbowDreamer42",
-    ].map((username) => createUserAndGetID(username))
+    ].map((username) => createUserAndGetID(username, token))
   );
 
   const client = new GraphQLClient(endpoint, {
@@ -743,24 +744,26 @@ async function main() {
       componentTemplateIDs.infrastructureTemplateID,
       client
     );
-    const service2ServiceRelationIDs = await createService2ServiceRelations(
-      microserviceIDs,
-      relationTemplateIDs,
-      client
-    );
-    const service2LibraryRelationIDs = await createService2LibraryRelations(
-      microserviceIDs,
-      libraryIDs,
-      relationTemplateIDs,
-      client
-    );
-    const service2InfrastructureRelationIDs =
-      await createService2InfrastructureRelations(
+    if (!ignoreRelations) {
+      const service2ServiceRelationIDs = await createService2ServiceRelations(
         microserviceIDs,
-        infrastructureIDs,
         relationTemplateIDs,
         client
       );
+      const service2LibraryRelationIDs = await createService2LibraryRelations(
+        microserviceIDs,
+        libraryIDs,
+        relationTemplateIDs,
+        client
+      );
+      const service2InfrastructureRelationIDs =
+        await createService2InfrastructureRelations(
+          microserviceIDs,
+          infrastructureIDs,
+          relationTemplateIDs,
+          client
+        );
+    }
 
     const testProjectInput = {
       projectDescription: "Test project",
@@ -1143,14 +1146,18 @@ async function createMicroserviceComponents(
     shoppingCartServiceIDV1,
     paymentServiceIDV1,
   ]) {
-    const parts = ["GET", "POST", "PUT", "DELETE"]
+    const parts = ["GET", "POST", "PUT", "DELETE"];
     const data = await createInterfaceSpecification(
       client,
       componentIds![1],
       restInterfaceTemplateID,
       "REST",
       "REST API",
-      [["1.0", parts], ["1.1", parts], ["2.0", parts]]
+      [
+        ["1.0", parts],
+        ["1.1", parts],
+        ["2.0", parts],
+      ]
     );
     for (const version of data.versions.nodes) {
       await addInterface(client, componentIds![0], version.id);
@@ -1169,7 +1176,7 @@ async function createComponentTemplates(client: GraphQLClient) {
     componentTemplateName: "microservice-template",
     componentVersionTemplateDescription: "Microservice Version Template",
     componentVersionTemplateName: "microservice-version-template",
-    shapeType: "RECT"
+    shapeType: "RECT",
   };
 
   const libraryTemplateInput = {
@@ -1177,7 +1184,7 @@ async function createComponentTemplates(client: GraphQLClient) {
     componentTemplateName: "library-template",
     componentVersionTemplateDescription: "Library Version Template",
     componentVersionTemplateName: "library-version-template",
-    shapeType: "ELLIPSE"
+    shapeType: "ELLIPSE",
   };
 
   const infrastructureTemplateInput = {
@@ -1185,7 +1192,7 @@ async function createComponentTemplates(client: GraphQLClient) {
     componentTemplateName: "infrastructure-template",
     componentVersionTemplateDescription: "Infrastructure Version Template",
     componentVersionTemplateName: "infrastructure-version-template",
-    shapeType: "HEXAGON"
+    shapeType: "HEXAGON",
   };
 
   const microserviceComponentTemplateID = await createComponentTemplate(
@@ -1459,36 +1466,24 @@ async function createDefaultLabels(
   return labelIDs;
 }
 
-async function createUserAndGetID(username: string) {
-  const newUserEndpoint = "http://localhost:3000/newUser";
+async function createUserAndGetID(username: string, apiToken: string) {
+  const newUserEndpoint = "http://localhost:3000/login/user";
   try {
     const newUserResponse = await axios.post(
       newUserEndpoint,
       {
         username,
         displayName: username,
-        email: "",
-        isAdmin: true,
+        email: `${username}@example.com`,
+        isAdmin: false,
       },
-      {}
+      {
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+        }
+      }
     );
-    return newUserResponse.data;
-  } catch (error) {
-    console.error(error);
-  }
-}
-async function getDeveloperToken(username: string) {
-  const tokenEndpoint = "http://localhost:3000/token";
-  try {
-    const userID = await createUserAndGetID(username);
-
-    const tokenResponse = await axios.get(
-      `${tokenEndpoint}?username=&id=${encodeURIComponent(userID)}`
-    );
-    if (tokenResponse.status !== 200) {
-      throw new Error(`Error fetching token: ${tokenResponse.statusText}`);
-    }
-    return tokenResponse.data;
+    return newUserResponse.data.id;
   } catch (error) {
     console.error(error);
   }
