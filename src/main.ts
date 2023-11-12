@@ -697,8 +697,9 @@ async function addInterface(
 }
 
 async function main() {
-  const endpoint = "http://localhost:8080/graphql";
   const token = process.argv[2];
+  const host = process.argv[3] || "localhost";
+  const endpoint = `http://${host}:8080/graphql`;
 
   const testUsers = await Promise.all(
     [
@@ -707,7 +708,7 @@ async function main() {
       "WhisperingShadow",
       "ElectricJaguar",
       "RainbowDreamer42",
-    ].map((username) => createUserAndGetID(username, token))
+    ].map((username) => createUserAndGetID(username, token, host))
   );
 
   const client = new GraphQLClient(endpoint, {
@@ -1466,8 +1467,8 @@ async function createDefaultLabels(
   return labelIDs;
 }
 
-async function createUserAndGetID(username: string, apiToken: string) {
-  const newUserEndpoint = "http://localhost:3000/login/user";
+async function createUserAndGetID(username: string, apiToken: string, host: string) {
+  const newUserEndpoint = `http://${host}:3000/login/user`;
   try {
     const newUserResponse = await axios.post(
       newUserEndpoint,
@@ -1483,7 +1484,7 @@ async function createUserAndGetID(username: string, apiToken: string) {
         }
       }
     );
-    return newUserResponse.data.id;
+    return newUserResponse.data.neo4jId;
   } catch (error) {
     console.error(error);
   }
